@@ -59,6 +59,33 @@ namespace cv {
 
 #define DIVUP(total, grain) ((total + grain - 1) / (grain))
 
+
+/**class ReusableMedianFilterKernel
+{
+    public: 
+        ReusableMedianFilterKernel()
+        {
+
+        }
+        ocl::Kernel getKernel(cv::String &kname, cv::String &kdefs);
+
+    private:
+        static ocl::Kernel kernel;
+
+}; 
+
+ocl::Kernel ReusableMedianFilterKernel::getKernel(cv::String &kname, cv::String &kdefs)
+{
+    if(kernel.empty()){
+        kernel.create(kname.c_str(), ocl::imgproc::medianFilter_oclsrc, kdefs.c_str() );
+
+    }
+    return kernel;
+}
+**/
+
+static ocl::Kernel medianFilterKernel;
+
 static bool ocl_medianFilter(InputArray _src, OutputArray _dst, int m)
 {
     size_t localsize[2] = { 16, 16 };
@@ -83,16 +110,18 @@ static bool ocl_medianFilter(InputArray _src, OutputArray _dst, int m)
                          :
                          format("-D T=%s -D T1=%s -D cn=%d", ocl::typeToStr(type), ocl::typeToStr(depth), cn) ;
 
-    ocl::Kernel k(kname.c_str(), ocl::imgproc::medianFilter_oclsrc, kdefs.c_str() );
-
-    if (k.empty())
+    if (medianFilterKernel.empty())
+        medianFilterKernel.create(kname.c_str(), ocl::imgproc::medianFilter_oclsrc, kdefs.c_str() );
+    
+    
+    if (medianFilterKernel.empty())
         return false;
 
     UMat src = _src.getUMat();
     _dst.create(src.size(), type);
     UMat dst = _dst.getUMat();
 
-    k.args(ocl::KernelArg::ReadOnlyNoSize(src), ocl::KernelArg::WriteOnly(dst));
+    medianFilterKernel.args(ocl::KernelArg::ReadOnlyNoSize(src), ocl::KernelArg::WriteOnly(dst));
 
     if( useOptimized )
     {
@@ -105,7 +134,7 @@ static bool ocl_medianFilter(InputArray _src, OutputArray _dst, int m)
         globalsize[1] = (src.rows + localsize[1] - 1) / localsize[1] * localsize[1];
     }
 
-    return k.run(2, globalsize, localsize, false);
+    return medianFilterKernel.run(2, globalsize, localsize, true);
 }
 
 #undef DIVUP

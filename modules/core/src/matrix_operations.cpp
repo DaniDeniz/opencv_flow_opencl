@@ -864,6 +864,10 @@ REDUCE_OP(32f, Min, float, float)
 
 namespace cv {
 
+
+static ocl::Kernel reduce_horzKernel;
+static ocl::Kernel reduceKernel;
+
 static bool ocl_reduce(InputArray _src, OutputArray _dst,
                        int dim, int op, int op0, int stype, int dtype)
 {
@@ -909,8 +913,11 @@ static bool ocl_reduce(InputArray _src, OutputArray _dst,
                                             ocl::convertTypeStr(sdepth, ddepth, 1, cvt[1]),
                                             ocl::convertTypeStr(wdepth, ddepth0, 1, cvt[2]),
                                             doubleSupport ? " -D DOUBLE_SUPPORT" : "");
-        ocl::Kernel k("reduce_horz_opt", ocl::core::reduce2_oclsrc, build_opt);
-        if (k.empty())
+        if (reduce_horzKernel.empty())
+            reduce_horzKernel.create("reduce_horz_opt", ocl::core::reduce2_oclsrc, build_opt);
+        
+
+        if (reduce_horzKernel.empty())
             return false;
         UMat src = _src.getUMat();
         Size dsize(1, src.rows);
@@ -918,15 +925,15 @@ static bool ocl_reduce(InputArray _src, OutputArray _dst,
         UMat dst = _dst.getUMat();
 
         if (op0 == CV_REDUCE_AVG)
-            k.args(ocl::KernelArg::ReadOnly(src),
+            reduce_horzKernel.args(ocl::KernelArg::ReadOnly(src),
                       ocl::KernelArg::WriteOnlyNoSize(dst), 1.0f / src.cols);
         else
-            k.args(ocl::KernelArg::ReadOnly(src),
+            reduce_horzKernel.args(ocl::KernelArg::ReadOnly(src),
                       ocl::KernelArg::WriteOnlyNoSize(dst));
 
         size_t localSize[2] = { (size_t)buf_cols, (size_t)tileHeight};
         size_t globalSize[2] = { (size_t)buf_cols, (size_t)src.rows };
-        return k.run(2, globalSize, localSize, false);
+        return reduce_horzKernel.run(2, globalSize, localSize, true);
     }
     else
     {
@@ -941,8 +948,11 @@ static bool ocl_reduce(InputArray _src, OutputArray _dst,
                                       ocl::convertTypeStr(wdepth, ddepth0, 1, cvt[1]),
                                       doubleSupport ? " -D DOUBLE_SUPPORT" : "");
 
-        ocl::Kernel k("reduce", ocl::core::reduce2_oclsrc, build_opt);
-        if (k.empty())
+        
+        if (reduceKernel.empty())
+            reduceKernel.create("reduce", ocl::core::reduce2_oclsrc, build_opt);
+        
+        if (reduceKernel.empty())
             return false;
 
         UMat src = _src.getUMat();
@@ -954,12 +964,12 @@ static bool ocl_reduce(InputArray _src, OutputArray _dst,
                 temparg = ocl::KernelArg::WriteOnlyNoSize(dst);
 
         if (op0 == CV_REDUCE_AVG)
-            k.args(srcarg, temparg, 1.0f / (dim == 0 ? src.rows : src.cols));
+            reduceKernel.args(srcarg, temparg, 1.0f / (dim == 0 ? src.rows : src.cols));
         else
-            k.args(srcarg, temparg);
+            reduceKernel.args(srcarg, temparg);
 
         size_t globalsize = std::max(dsize.width, dsize.height);
-        return k.run(1, &globalsize, NULL, false);
+        return reduceKernel.run(1, &globalsize, NULL, true);
     }
 }
 

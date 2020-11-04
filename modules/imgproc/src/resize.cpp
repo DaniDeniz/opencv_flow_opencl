@@ -3255,6 +3255,9 @@ static void ocl_computeResizeAreaTabs(int ssize, int dsize, double scale, int * 
     ofs_tab[dx] = k;
 }
 
+
+static ocl::Kernel resizeLNKernel;
+
 static bool ocl_resize( InputArray _src, OutputArray _dst, Size dsize,
                         double fx, double fy, int interpolation)
 {
@@ -3360,7 +3363,9 @@ static bool ocl_resize( InputArray _src, OutputArray _dst, Size dsize,
             UMat coeffs;
             Mat(1, static_cast<int>(_buffer.size()), CV_8UC1, _buffer.data()).copyTo(coeffs);
 
-            k.create("resizeLN", ocl::imgproc::resize_oclsrc,
+            if (resizeLNKernel.empty())
+            {
+                resizeLNKernel.create("resizeLN", ocl::imgproc::resize_oclsrc,
                      format("-D INTER_LINEAR_INTEGER -D depth=%d -D T=%s -D T1=%s "
                             "-D WT=%s -D convertToWT=%s -D convertToDT=%s -D cn=%d "
                             "-D INTER_RESIZE_COEF_BITS=%d",
@@ -3368,6 +3373,9 @@ static bool ocl_resize( InputArray _src, OutputArray _dst, Size dsize,
                             ocl::convertTypeStr(depth, wdepth, cn, buf[0]),
                             ocl::convertTypeStr(wdepth, depth, cn, buf[1]),
                             cn, INTER_RESIZE_COEF_BITS));
+               
+            }
+            k = resizeLNKernel;
             if (k.empty())
                 return false;
 
@@ -3377,7 +3385,8 @@ static bool ocl_resize( InputArray _src, OutputArray _dst, Size dsize,
         else
         {
             int wdepth = std::max(depth, CV_32S), wtype = CV_MAKETYPE(wdepth, cn);
-            k.create("resizeLN", ocl::imgproc::resize_oclsrc,
+            if (resizeLNKernel.empty()){
+                resizeLNKernel.create("resizeLN", ocl::imgproc::resize_oclsrc,
                      format("-D INTER_LINEAR -D depth=%d -D T=%s -D T1=%s "
                             "-D WT=%s -D convertToWT=%s -D convertToDT=%s -D cn=%d "
                             "-D INTER_RESIZE_COEF_BITS=%d",
@@ -3385,6 +3394,9 @@ static bool ocl_resize( InputArray _src, OutputArray _dst, Size dsize,
                             ocl::convertTypeStr(depth, wdepth, cn, buf[0]),
                             ocl::convertTypeStr(wdepth, depth, cn, buf[1]),
                             cn, INTER_RESIZE_COEF_BITS));
+            }
+            k = resizeLNKernel;
+            
             if (k.empty())
                 return false;
 
@@ -3462,10 +3474,10 @@ static bool ocl_resize( InputArray _src, OutputArray _dst, Size dsize,
             k.args(srcarg, dstarg, inv_fxf, inv_fyf, ocl::KernelArg::PtrReadOnly(tabofsOcl),
                    ocl::KernelArg::PtrReadOnly(mapOcl), ocl::KernelArg::PtrReadOnly(alphaOcl));
 
-        return k.run(2, globalsize, NULL, false);
+        return k.run(2, globalsize, NULL, true);
     }
 
-    return k.run(2, globalsize, 0, false);
+    return k.run(2, globalsize, 0, true);
 }
 
 #endif

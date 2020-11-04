@@ -3545,6 +3545,7 @@ int Kernel::set(int i, const KernelArg& arg)
     }
     if( i == 0 )
         p->cleanupUMats();
+        p->images.clear();
     cl_int status = 0;
     if( arg.m )
     {
