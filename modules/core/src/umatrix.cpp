@@ -1128,7 +1128,7 @@ UMat UMat::mul(InputArray m, double scale) const
 }
 
 #ifdef HAVE_OPENCL
-
+static ocl::Kernel kernel_reduce;
 static bool ocl_dot( InputArray _src1, InputArray _src2, double & res )
 {
     UMat src1 = _src1.getUMat().reshape(1), src2 = _src2.getUMat().reshape(1);
@@ -1150,15 +1150,18 @@ static bool ocl_dot( InputArray _src1, InputArray _src2, double & res )
     wgs2_aligned >>= 1;
 
     char cvt[40];
-    ocl::Kernel k("reduce", ocl::core::reduce_oclsrc,
-                  format("-D srcT=%s -D srcT1=%s -D dstT=%s -D dstTK=%s -D ddepth=%d -D convertToDT=%s -D OP_DOT "
-                         "-D WGS=%d -D WGS2_ALIGNED=%d%s%s%s -D kercn=%d",
-                         ocl::typeToStr(CV_MAKE_TYPE(depth, kercn)), ocl::typeToStr(depth),
-                         ocl::typeToStr(ddepth), ocl::typeToStr(CV_MAKE_TYPE(ddepth, kercn)),
-                         ddepth, ocl::convertTypeStr(depth, ddepth, kercn, cvt),
-                         (int)wgs, wgs2_aligned, doubleSupport ? " -D DOUBLE_SUPPORT" : "",
-                         _src1.isContinuous() ? " -D HAVE_SRC_CONT" : "",
-                         _src2.isContinuous() ? " -D HAVE_SRC2_CONT" : "", kercn));
+    if (kernel_reduce.empty())
+        kernel_reduce.create("reduce", ocl::core::reduce_oclsrc,
+                            format("-D srcT=%s -D srcT1=%s -D dstT=%s -D dstTK=%s -D ddepth=%d -D convertToDT=%s -D OP_DOT "
+                            "-D WGS=%d -D WGS2_ALIGNED=%d%s%s%s -D kercn=%d",
+                            ocl::typeToStr(CV_MAKE_TYPE(depth, kercn)), ocl::typeToStr(depth),
+                            ocl::typeToStr(ddepth), ocl::typeToStr(CV_MAKE_TYPE(ddepth, kercn)),
+                            ddepth, ocl::convertTypeStr(depth, ddepth, kercn, cvt),
+                            (int)wgs, wgs2_aligned, doubleSupport ? " -D DOUBLE_SUPPORT" : "",
+                            _src1.isContinuous() ? " -D HAVE_SRC_CONT" : "",
+                            _src2.isContinuous() ? " -D HAVE_SRC2_CONT" : "", kercn));
+    
+    ocl::Kernel k = kernel_reduce;
     if (k.empty())
         return false;
 

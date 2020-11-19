@@ -28,6 +28,7 @@ SumFunc getSumFunc(int depth)
 
 #ifdef HAVE_OPENCL
 
+static ocl::Kernel kernel_reduce;
 bool ocl_sum( InputArray _src, Scalar & res, int sum_op, InputArray _mask,
                      InputArray _src2, bool calc2, const Scalar & res2 )
 {
@@ -78,7 +79,10 @@ bool ocl_sum( InputArray _src, Scalar & res, int sum_op, InputArray _mask,
                          haveSrc2 && _src2.isContinuous() ? " -D HAVE_SRC2_CONT" : "",
                          depth <= CV_32S && ddepth == CV_32S ? ocl::convertTypeStr(CV_8U, ddepth, convert_cn, cvt[1]) : "noconvert");
 
-    ocl::Kernel k("reduce", ocl::core::reduce_oclsrc, opts);
+    if (kernel_reduce.empty())
+    	kernel_reduce.create("reduce", ocl::core::reduce_oclsrc, opts);
+
+    ocl::Kernel k = kernel_reduce;
     if (k.empty())
         return false;
 
